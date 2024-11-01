@@ -29,19 +29,21 @@ my-fullstack-project/
 ```bash
 mkdir my-fullstack-project
 cd my-fullstack-project
+git clone project
 ```
 
 2. Setup frontend
 ```bash
-npx create-nuxt-app frontend
+cd frontend
+npm i
+npm run dev
 ```
 
 3. Setup backend
 ```bash
-mkdir backend
 cd backend
-npm init -y
-npm install express cors
+npm i
+npm run dev
 ```
 
 4. Add the .gitignore file to the root of your project
