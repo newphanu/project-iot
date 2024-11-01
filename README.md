@@ -42,6 +42,7 @@ npm run dev
 3. Setup backend
 ```bash
 cd backend
+create .env 
 npm i
 npm run dev
 ```
