@@ -5,6 +5,18 @@ export default defineNuxtConfig({
   build: {
     transpile: ['vuetify'],
   },
+  
+  css: [
+    '~/assets/css/main.css',
+    '@/assets/css/font.css',
+    '~/assets/css/styles.css'
+  ],
+  postcss: {
+    plugins: {
+      tailwindcss: {},
+      autoprefixer: {},
+    },
+  },
 
   modules: [
     (_options, nuxt) => {
