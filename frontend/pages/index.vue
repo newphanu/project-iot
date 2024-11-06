@@ -33,7 +33,7 @@
             </nuxt-link>
           </li>
           <li>
-            <nuxt-link to="/history"class="flex items-center space-x-2">
+            <nuxt-link to="/history" class="flex items-center space-x-2">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
@@ -54,19 +54,30 @@
       <!-- Main Content -->
       <div class="flex-1 overflow-auto p-8">
         <!-- Stats Cards -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
-          <div v-for="(stat, index) in stats" :key="index" 
-               class="stat bg-base-100 shadow rounded-lg hover:shadow-lg transition-all duration-300">
-            <div class="stat-figure text-primary">
-              <component :is="stat.icon" class="w-8 h-8" />
-            </div>
-            <div class="stat-title">{{ stat.title }}</div>
-            <div class="stat-value text-primary">{{ stat.value }}</div>
-            <div class="stat-desc">
-              <span :class="stat.change >= 0 ? 'text-success' : 'text-error'">
-                {{ stat.change >= 0 ? '↗' : '↘' }} {{ Math.abs(stat.change) }}% จากเดือนที่แล้ว
-              </span>
-            </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6 mb-8">
+          <div class="stat bg-base-100 shadow rounded-lg hover:shadow-lg transition-all duration-300">
+            <div class="stat-title">Voltage</div>
+            <div class="stat-value text-primary">{{ stats.voltage }}</div>
+          </div>
+          <div class="stat bg-base-100 shadow rounded-lg hover:shadow-lg transition-all duration-300">
+            <div class="stat-title">Current</div>
+            <div class="stat-value text-primary">{{ stats.current }}</div>
+          </div>
+          <div class="stat bg-base-100 shadow rounded-lg hover:shadow-lg transition-all duration-300">
+            <div class="stat-title">Power</div>
+            <div class="stat-value text-primary">{{ stats.power }}</div>
+          </div>
+          <div class="stat bg-base-100 shadow rounded-lg hover:shadow-lg transition-all duration-300">
+            <div class="stat-title">Energy</div>
+            <div class="stat-value text-primary">{{ stats.energy }}</div>
+          </div>
+          <div class="stat bg-base-100 shadow rounded-lg hover:shadow-lg transition-all duration-300">
+            <div class="stat-title">Frequency</div>
+            <div class="stat-value text-primary">{{ stats.frequency }}</div>
+          </div>
+          <div class="stat bg-base-100 shadow rounded-lg hover:shadow-lg transition-all duration-300">
+            <div class="stat-title">Power Facter</div>
+            <div class="stat-value text-primary">{{ stats.powerfacter }}</div>
           </div>
         </div>
 
@@ -149,7 +160,8 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import mqtt from 'mqtt'
+import { ref, reactive, onMounted } from 'vue'
 import Chart from 'chart.js/auto'
 
 const currentTheme = ref('light')
@@ -158,41 +170,17 @@ const toggleTheme = () => {
   currentTheme.value = currentTheme.value === 'light' ? 'dark' : 'light'
 }
 
-// ข้อมูลสถิติ
-const stats = ref([
-  { 
-    title: 'การใช้งานทั่วไป',
-    value: '156 หน่วย',
-    change: 14,
-    icon: 'div',
-  },
-  { 
-    title: 'เครื่องปรับอากาศ',
-    value: '245 หน่วย',
-    change: -2,
-    icon: 'div',
-  },
-  { 
-    title: 'แสงสว่าง',
-    value: '89 หน่วย',
-    change: 7,
-    icon: 'div',
-  },
-  { 
-    title: 'เครื่องใช้ไฟฟ้า',
-    value: '178 หน่วย',
-    change: 8,
-    icon: 'div',
-  },
-  { 
-    title: 'รวมทั้งหมด',
-    value: '668 หน่วย',
-    change: 5,
-    icon: 'div',
-  }
-])
+// สถิติข้อมูล
+const stats = reactive({
+  voltage: '0',
+  current: '0',
+  power: '0',
+  energy: '0',
+  frequency: '0',
+  powerFactor: '0'
+})
 
-// ข้อมูลประวัติ
+// ประวัติข้อมูล
 const history = ref([
   {
     date: '1 มี.ค. 2567',
@@ -209,11 +197,11 @@ const history = ref([
     lighting: 85,
     appliances: 170,
     total: 645
-  },
-  // เพิ่มข้อมูลย้อนหลังตามต้องการ
+  }
+  // Add more history data as needed
 ])
 
-// ข้อมูลการคาดการณ์
+// การคาดการณ์ข้อมูล
 const prediction = ref({
   cost: '2,450',
   units: '680',
@@ -222,9 +210,35 @@ const prediction = ref({
 
 const lineChart = ref(null)
 const barChart = ref(null)
+const client = ref(null)
+const status = ref('Disconnected')
 
+// MQTT Functions
+const onMqttConnect = () => {
+  client.value.subscribe("iot/power")
+  status.value = "Connected"
+  console.log('connected')
+}
+
+const onMqttMessage = (topic, message) => {
+  if (topic === "iot/power") {
+    const payload = JSON.parse(message.toString())
+    stats.voltage = parseFloat(payload.voltage).toFixed(3)
+    stats.current = parseFloat(payload.current)
+    stats.power = parseFloat(payload.power)
+    stats.energy = parseFloat(payload.energy).toFixed(3)
+    stats.frequency = parseFloat(payload.frequency)
+    stats.powerfacter = parseFloat(payload.powerfacter)
+  }
+}
+
+// Mounted hook for setting up MQTT and Charts
 onMounted(() => {
-  // กราฟเส้นแสดงการใช้ไฟฟ้ารายวัน
+  client.value = mqtt.connect("ws://broker.emqx.io:8083/mqtt")
+  client.value.on("connect", onMqttConnect)
+  client.value.on("message", onMqttMessage)
+
+  // Line Chart
   new Chart(lineChart.value, {
     type: 'line',
     data: {
@@ -245,7 +259,7 @@ onMounted(() => {
       plugins: {
         legend: {
           position: 'top',
-          },
+        },
         title: {
           display: true,
           text: 'การใช้ไฟฟ้ารายวัน (หน่วย)'
@@ -263,7 +277,7 @@ onMounted(() => {
     }
   })
 
-  // กราฟแท่งแสดงการเปรียบเทียบรายเดือน
+  // Bar Chart
   new Chart(barChart.value, {
     type: 'bar',
     data: {
