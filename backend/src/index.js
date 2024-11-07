@@ -1,66 +1,61 @@
 const express = require('express');
 const cors = require('cors');
-const dotenv = require('dotenv');
-const bodyParser = require('body-parser');
+const mqtt = require('mqtt');
+const knex = require('./config');  // Make sure knex.js is correctly configured
 const router = require('./router');
 
-var mqtt = require('mqtt');
-
-const MQTT_SERVER = "broker.emqx.io";
-const MQTT_PORT = "8083";
-const MQTT_USER = ""; 
-const MQTT_PASSWORD = "";
-
-var client = mqtt.connect({
-    host: MQTT_SERVER,
-    port: MQTT_PORT,
-    username: MQTT_USER,
-    password: MQTT_PASSWORD
-});
-
-client.on('connect', () => {
-    console.log("MQTT Connected to broker:", MQTT_SERVER);
-    client.subscribe('iot/power', (err) => {
-        if (err) {
-            console.error("Subscription error:", err);
-        } else {
-            console.log("Subscribed to topic: iot/power");
-        }
-    });
-});
-
-client.on('error', (error) => {
-    console.error("MQTT Connection Error:", error);
-});
-
-client.on('message', (topic, message) => {
-    if (topic === 'iot/power') {
-        console.log(`Received message on topic ${topic}: ${message.toString()}`);
-
-        // Attempt to parse the message if it's in JSON format
-        try {
-            const payload = JSON.parse(message.toString());
-            console.log("Parsed payload:", payload);
-        } catch (err) {
-            console.error("Message parsing error:", err);
-        }
-    } else {
-        console.log(`Received message on topic ${topic}, but it's not 'iot/power'.`);
-    }
-});
-
-dotenv.config();
-const port = process.env.PORT || 4000;
 const app = express();
-
 app.use(cors());
-// app.use(bodyParser.json());
+app.use(router)
 
-app.use(router);
 
-app.listen(port, () => {
-    console.log(`Server running on port ${port}`);
+const mqttClient = mqtt.connect('mqtt://202.29.230.252');
+
+let latestData = {
+  voltage: 0,
+  current: 0,
+  power: 0,
+  energy: 0,
+  frequency: 0,
+  pf: 0
+};
+
+mqttClient.on('connect', () => {
+  console.log('Connected to MQTT broker');
+  const topics = [
+    'sensor/voltage',
+    'sensor/current',
+    'sensor/power',
+    'sensor/energy',
+    'sensor/frequency',
+    'sensor/pf'
+  ];
+  
+  mqttClient.subscribe(topics);
 });
 
+mqttClient.on('message', (topic, message) => {
+  const key = topic.split('/')[1];
+  latestData[key] = parseFloat(message.toString());
+  console.log(`Received: ${topic} = ${message.toString()}`);
 
-// test GitHub Pull Request
+  // Insert the latest data into the database
+  knex('sensor_data').insert({
+    voltage: latestData.voltage,
+    current: latestData.current,
+    power: latestData.power,
+    energy: latestData.energy,
+    frequency: latestData.frequency,
+    pf: latestData.pf
+  })
+  .then(() => console.log('Data saved to database'))
+  .catch(err => console.error('Failed to save data:', err));
+});
+
+app.get('/api/sensor-data', (req, res) => {
+  res.json(latestData);
+});
+
+app.listen(4000, '0.0.0.0', () => {
+  console.log('API server running on port 4000');
+});
